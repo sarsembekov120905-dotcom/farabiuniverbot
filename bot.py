@@ -2,7 +2,7 @@ import os
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-TOKEN = os.getenv("8643950667:AAGfKOG1ETx6w5WABIWKIkOrv1N8ZU9-MPI")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 FAQ = {
     "как узнать расписание": "Расписание можно посмотреть в личном кабинете студента или на официальных ресурсах университета.",
