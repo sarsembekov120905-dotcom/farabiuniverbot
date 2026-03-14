@@ -2,10 +2,17 @@ import os
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+from openai import OpenAI
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+
+client = OpenAI(
+    api_key=DEEPSEEK_API_KEY,
+    base_url="https://api.deepseek.com",
+)
 
 FAQ = {
     "как узнать расписание": "Расписание можно посмотреть в личном кабинете студента.",
@@ -16,37 +23,70 @@ FAQ = {
     "wifi казну": "Данные для WiFi можно найти во вкладке Бакалавр в личном кабинете."
 }
 
+SYSTEM_PROMPT = """
+Ты помощник для студентов Farabi University.
+Отвечай кратко, понятно и по делу.
+Если ты не уверен в точности ответа, честно скажи об этом и посоветуй уточнить в деканате,
+офисе регистратора, службе поддержки или на официальном сайте университета.
+Не выдумывай даты, кабинеты, ссылки и контакты.
+Отвечай на том языке, на котором написал студент.
+"""
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["Как узнать расписание", "Где посмотреть оценки"],
         ["Как получить справку", "Как восстановить пароль"],
         ["Как подать на общежитие", "WiFi КазНУ"]
     ]
-
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
     await update.message.reply_text(
         "Привет! Я бот для студентов Farabi University.\n"
-        "Выберите вопрос кнопкой или напишите свой.",
+        "Выбери вопрос кнопкой или напиши свой.",
         reply_markup=reply_markup
     )
 
-async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = (update.message.text or "").strip().lower()
+def ask_deepseek(user_text: str) -> str:
+    response = client.chat.completions.create(
+        model="deepseek-chat",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_text},
+        ],
+        temperature=0.3,
+        max_tokens=500,
+    )
+    return response.choices[0].message.content.strip()
 
-    if text in FAQ:
-        await update.message.reply_text(FAQ[text])
-    else:
+async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = (update.message.text or "").strip()
+    normalized = text.lower()
+
+    if normalized in FAQ:
+        await update.message.reply_text(FAQ[normalized])
+        return
+
+    if not DEEPSEEK_API_KEY:
         await update.message.reply_text(
-            "Пока не знаю точного ответа. Попробуй задать вопрос иначе."
+            "Умный режим пока не настроен. Попробуй задать вопрос иначе."
+        )
+        return
+
+    try:
+        ai_answer = ask_deepseek(text)
+        if not ai_answer:
+            ai_answer = "Не получилось подготовить ответ. Попробуй ещё раз."
+        await update.message.reply_text(ai_answer)
+    except Exception:
+        await update.message.reply_text(
+            "Сейчас не получается обратиться к ИИ. Попробуй чуть позже."
         )
 
 def run_bot():
-    if not TOKEN:
+    if not TELEGRAM_BOT_TOKEN:
         raise ValueError("TELEGRAM_BOT_TOKEN не найден")
 
-    app = ApplicationBuilder().token(TOKEN).build()
-
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, answer))
 
