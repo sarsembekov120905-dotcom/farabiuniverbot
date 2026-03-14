@@ -27,12 +27,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "Привет! Я бот для студентов Farabi University.\n"
-        "Выберите вопрос или напишите свой.",
+        "Выберите вопрос кнопкой или напишите свой.",
         reply_markup=reply_markup
     )
 
 async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.lower()
+    text = (update.message.text or "").strip().lower()
 
     if text in FAQ:
         await update.message.reply_text(FAQ[text])
@@ -53,8 +53,6 @@ def run_bot():
     print("Бот запущен...")
     app.run_polling()
 
-# ===== HTTP сервер для Render =====
-
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -67,8 +65,6 @@ def run_web_server():
     print(f"Web server running on port {port}")
     server.serve_forever()
 
-# ===== запуск =====
-
 if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
-    run_web_server()
+    threading.Thread(target=run_web_server, daemon=True).start()
+    run_bot()
